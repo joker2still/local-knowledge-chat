@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+node_modules/
+dist/
+coverage/
+backend/data/raw/*
+backend/data/processed/*
+backend/data/qdrant/*
+.vscode
+test_embed.py
+!.gitkeep
