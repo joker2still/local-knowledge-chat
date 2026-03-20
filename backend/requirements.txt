@@ -1,5 +1,7 @@
-fastapi
+﻿fastapi
 uvicorn
 requests
 pydantic
 python-multipart
+qdrant-client
+numpy

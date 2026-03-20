@@ -1,22 +1,20 @@
-import json
-from pathlib import Path
+﻿from pathlib import Path
 from uuid import uuid4
 
 from fastapi import UploadFile
 
 from backend.app.services.embedding_service import generate_embedding
+from backend.app.services.vector_store import upsert_chunks
 
 
 BASE_DATA_DIR = Path("backend/data")
 RAW_DATA_DIR = BASE_DATA_DIR / "raw"
-PROCESSED_DATA_DIR = BASE_DATA_DIR / "processed"
-CHUNKS_FILE = PROCESSED_DATA_DIR / "chunks.json"
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 100
 
 
 def ingest_text_file(file: UploadFile) -> dict:
-    _ensure_data_dirs()
+    RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     content = file.file.read()
     try:
@@ -31,30 +29,36 @@ def ingest_text_file(file: UploadFile) -> dict:
     raw_file_path.write_bytes(content)
 
     chunks = split_text(text)
-    chunk_records = []
+    if not chunks:
+        raise ValueError("Uploaded file has no valid text chunks")
 
-    for index, chunk in enumerate(chunks):
-        chunk_records.append(
+    points = []
+    vector_size = 0
+
+    for chunk in chunks:
+        chunk_id = str(uuid4())
+        embedding = generate_embedding(chunk)
+        if vector_size == 0:
+            vector_size = len(embedding)
+
+        points.append(
             {
-                "id": str(uuid4()),
-                "filename": file.filename,
-                "chunk_index": index,
-                "text": chunk,
-                "embedding": generate_embedding(chunk),
+                "id": chunk_id,
+                "vector": embedding,
+                "payload": {
+                    "source": file.filename,
+                    "chunk_id": chunk_id,
+                    "text": chunk,
+                },
             }
         )
 
-    existing_records = _load_existing_chunks()
-    existing_records.extend(chunk_records)
-    CHUNKS_FILE.write_text(
-        json.dumps(existing_records, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    upsert_chunks(points, vector_size=vector_size)
 
     return {
         "filename": file.filename,
-        "chunks": len(chunk_records),
-        "output_file": str(CHUNKS_FILE),
+        "chunks": len(points),
+        "vector_store": "qdrant_local",
     }
 
 
@@ -71,19 +75,3 @@ def split_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
         start += step
 
     return chunks
-
-
-def load_chunks() -> list[dict]:
-    return _load_existing_chunks()
-
-
-def _ensure_data_dirs() -> None:
-    RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def _load_existing_chunks() -> list[dict]:
-    if not CHUNKS_FILE.exists():
-        return []
-
-    return json.loads(CHUNKS_FILE.read_text(encoding="utf-8"))
