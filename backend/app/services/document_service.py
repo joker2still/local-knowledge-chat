@@ -1,36 +1,42 @@
-﻿from pathlib import Path
+﻿import logging
 from uuid import uuid4
 
 from fastapi import UploadFile
 
+from backend.app.core.config import settings
+from backend.app.core.exceptions import AppError
 from backend.app.services.embedding_service import generate_embedding
 from backend.app.services.vector_store import upsert_chunks
 
 
-BASE_DATA_DIR = Path("backend/data")
-RAW_DATA_DIR = BASE_DATA_DIR / "raw"
-CHUNK_SIZE = 500
-CHUNK_OVERLAP = 100
+logger = logging.getLogger(__name__)
 
 
 def ingest_text_file(file: UploadFile) -> dict:
-    RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    filename = file.filename or ""
+    if not filename.endswith(".txt"):
+        raise AppError(message="Only .txt files are supported", code="invalid_file_type", status_code=400)
 
     content = file.file.read()
     try:
         text = content.decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise ValueError("Only UTF-8 encoded .txt files are supported") from exc
+        raise AppError(message="Only UTF-8 encoded .txt files are supported", code="invalid_encoding", status_code=400) from exc
 
     if not text.strip():
-        raise ValueError("Uploaded file is empty")
+        raise AppError(message="Uploaded file is empty", code="empty_file", status_code=400)
 
-    raw_file_path = RAW_DATA_DIR / file.filename
+    settings.raw_data_dir_obj.mkdir(parents=True, exist_ok=True)
+    raw_file_path = settings.raw_data_dir_obj / filename
     raw_file_path.write_bytes(content)
+
+    logger.info("file_uploaded filename=%s size_bytes=%s", filename, len(content))
 
     chunks = split_text(text)
     if not chunks:
-        raise ValueError("Uploaded file has no valid text chunks")
+        raise AppError(message="Uploaded file has no valid text chunks", code="no_chunks", status_code=400)
+
+    logger.info("chunks_created filename=%s chunk_count=%s", filename, len(chunks))
 
     points = []
     vector_size = 0
@@ -40,35 +46,38 @@ def ingest_text_file(file: UploadFile) -> dict:
         embedding = generate_embedding(chunk)
         if vector_size == 0:
             vector_size = len(embedding)
-
         points.append(
             {
                 "id": chunk_id,
                 "vector": embedding,
                 "payload": {
-                    "source": file.filename,
+                    "source": filename,
                     "chunk_id": chunk_id,
                     "text": chunk,
                 },
             }
         )
 
+    logger.info("embeddings_generated filename=%s chunk_count=%s", filename, len(points))
     upsert_chunks(points, vector_size=vector_size)
+    logger.info("chunks_upserted filename=%s chunk_count=%s", filename, len(points))
 
     return {
-        "filename": file.filename,
+        "filename": filename,
         "chunks": len(points),
         "vector_store": "qdrant_local",
     }
 
 
-def split_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
+def split_text(text: str, chunk_size: int | None = None, overlap: int | None = None) -> list[str]:
+    size = chunk_size or settings.upload_chunk_size
+    overlap_size = overlap or settings.upload_chunk_overlap
+    step = max(size - overlap_size, 1)
+
     chunks = []
     start = 0
-    step = chunk_size - overlap
-
     while start < len(text):
-        end = start + chunk_size
+        end = start + size
         chunk = text[start:end].strip()
         if chunk:
             chunks.append(chunk)

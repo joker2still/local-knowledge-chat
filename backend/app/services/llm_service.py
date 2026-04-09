@@ -1,16 +1,20 @@
+﻿import logging
+
 import requests
 
+from backend.app.core.config import settings
+from backend.app.core.exceptions import ExternalServiceError
 
-OLLAMA_GENERATE_URL = "http://localhost:11434/api/generate"
-CHAT_MODEL_NAME = "qwen2.5"
+
+logger = logging.getLogger(__name__)
 
 
 def generate_response(prompt: str) -> str:
     try:
         response = requests.post(
-            OLLAMA_GENERATE_URL,
+            settings.ollama_generate_url,
             json={
-                "model": CHAT_MODEL_NAME,
+                "model": settings.ollama_chat_model,
                 "prompt": prompt,
                 "stream": False,
             },
@@ -18,7 +22,8 @@ def generate_response(prompt: str) -> str:
         )
         response.raise_for_status()
     except requests.RequestException as exc:
-        raise RuntimeError("Failed to call local Ollama API") from exc
+        logger.exception("Ollama generate call failed")
+        raise ExternalServiceError("Failed to call Ollama generate API") from exc
 
     data = response.json()
-    return data.get("response", "")
+    return str(data.get("response", ""))

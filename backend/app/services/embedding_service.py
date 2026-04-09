@@ -1,25 +1,32 @@
+﻿import logging
+
 import requests
 
-OLLAMA_EMBED_URL = "http://localhost:11434/api/embeddings"
-EMBEDDING_MODEL_NAME = "nomic-embed-text"
+from backend.app.core.config import settings
+from backend.app.core.exceptions import ExternalServiceError
+
+
+logger = logging.getLogger(__name__)
+
 
 def generate_embedding(text: str) -> list[float]:
     try:
         response = requests.post(
-            OLLAMA_EMBED_URL,
+            settings.ollama_embeddings_url,
             json={
-                "model": EMBEDDING_MODEL_NAME,
+                "model": settings.ollama_embedding_model,
                 "prompt": text,
             },
             timeout=60,
         )
         response.raise_for_status()
     except requests.RequestException as exc:
-        raise RuntimeError(f"Failed to call local Ollama embeddings API: {exc}") from exc
+        logger.exception("Ollama embedding call failed")
+        raise ExternalServiceError("Failed to call Ollama embeddings API") from exc
 
     data = response.json()
     embedding = data.get("embedding")
     if not embedding:
-        raise RuntimeError(f"Ollama embeddings API returned no embedding: {data}")
+        raise ExternalServiceError("Ollama embeddings API returned no embedding")
 
     return embedding

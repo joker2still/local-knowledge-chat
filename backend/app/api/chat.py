@@ -1,19 +1,12 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+﻿from fastapi import APIRouter
 
+from backend.app.schemas.chat import ChatRequest, ChatResponse
 from backend.app.services.rag_service import answer_question
 
 
 router = APIRouter()
 
 
-class ChatRequest(BaseModel):
-    prompt: str
-
-
-@router.post("/chat")
-def chat(payload: ChatRequest) -> dict:
-    try:
-        return answer_question(payload.prompt)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+@router.post("/chat", response_model=ChatResponse)
+def chat(payload: ChatRequest) -> ChatResponse:
+    return answer_question(payload.prompt)
