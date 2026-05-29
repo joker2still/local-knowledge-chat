@@ -2,16 +2,22 @@ import type { ChatResponse, ChatSource, UploadResponse } from "../types";
 
 const BASE_URL = "http://127.0.0.1:8000";
 
+function readErrorMessage(data: any, fallback: string): string {
+  return String(data?.detail ?? data?.error?.message ?? fallback);
+}
+
 function normalizeSource(raw: any): ChatSource {
   return {
     source: String(raw?.source ?? raw?.filename ?? ""),
     chunk_id: String(raw?.chunk_id ?? ""),
     score: Number(raw?.score ?? raw?.similarity ?? 0),
     preview: String(raw?.preview ?? raw?.text_preview ?? ""),
+    page_number: raw?.page_number ?? null,
+    file_type: String(raw?.file_type ?? ""),
   };
 }
 
-export async function uploadTxtFile(file: File): Promise<UploadResponse> {
+export async function uploadDocumentFile(file: File): Promise<UploadResponse> {
   const formData = new FormData();
   formData.append("file", file);
 
@@ -22,7 +28,7 @@ export async function uploadTxtFile(file: File): Promise<UploadResponse> {
 
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(String(data?.detail ?? "Upload failed"));
+    throw new Error(readErrorMessage(data, "Upload failed"));
   }
 
   return data as UploadResponse;
@@ -39,7 +45,7 @@ export async function sendChat(prompt: string): Promise<ChatResponse> {
 
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(String(data?.detail ?? "Chat request failed"));
+    throw new Error(readErrorMessage(data, "Chat request failed"));
   }
 
   const sources = Array.isArray(data?.sources)

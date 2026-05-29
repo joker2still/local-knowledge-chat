@@ -5,3 +5,4 @@ pydantic
 python-multipart
 qdrant-client
 numpy
+pypdf

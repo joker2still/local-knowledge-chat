@@ -2,12 +2,12 @@
 
 ## 1. Project Overview
 Local Knowledge Chat is a minimal local RAG (Retrieval-Augmented Generation) application.
-It lets you upload `.txt` documents, stores embeddings in local Qdrant, and answers questions with context retrieved from your uploaded files.
+It lets you upload `.txt` and `.pdf` documents, stores embeddings in local Qdrant, and answers questions with context retrieved from your uploaded files.
 
 ## 2. Features
 - FastAPI backend with clean service-based structure
 - React + TypeScript frontend (Vite)
-- `.txt` document upload and chunking
+- `.txt` and `.pdf` document upload and chunking
 - Local embedding generation via Ollama
 - Local vector search via Qdrant (embedded/local mode)
 - RAG chat answers with source snippets
@@ -95,7 +95,7 @@ ollama pull nomic-embed-text
 
 ## 8. How to Test Upload and Chat
 1. Start Ollama, backend, and frontend.
-2. Upload a `.txt` file from frontend upload section.
+2. Upload a `.txt` or `.pdf` file from frontend upload section.
 3. Ask a question in chat input.
 4. Verify answer and sources are shown.
 
@@ -111,6 +111,11 @@ curl http://127.0.0.1:8000/health
 ```bash
 curl -X POST "http://127.0.0.1:8000/upload" \
   -F "file=@sample.txt"
+```
+
+```bash
+curl -X POST "http://127.0.0.1:8000/upload" \
+  -F "file=@sample.pdf"
 ```
 
 ### Chat
@@ -129,7 +134,9 @@ Example chat response:
       "source": "sample.txt",
       "chunk_id": "...",
       "score": 0.72,
-      "preview": "..."
+      "preview": "...",
+      "page_number": null,
+      "file_type": "txt"
     }
   ]
 }

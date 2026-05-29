@@ -10,6 +10,8 @@ class ChatSource(BaseModel):
     chunk_id: str
     score: float
     preview: str
+    page_number: int | None = None
+    file_type: str = ""
 
 
 class ChatResponse(BaseModel):

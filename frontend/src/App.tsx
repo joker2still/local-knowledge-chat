@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
 
-import { sendChat, uploadTxtFile } from "./services/api";
+import { sendChat, uploadDocumentFile } from "./services/api";
 import type { ChatSource } from "./types";
 
 function App() {
@@ -18,7 +18,7 @@ function App() {
   async function handleUpload(event: FormEvent) {
     event.preventDefault();
     if (!selectedFile) {
-      setUploadError("Please choose a .txt file first.");
+      setUploadError("Please choose a .txt or .pdf file first.");
       return;
     }
 
@@ -27,7 +27,7 @@ function App() {
     setUploadMessage("");
 
     try {
-      const result = await uploadTxtFile(selectedFile);
+      const result = await uploadDocumentFile(selectedFile);
       setUploadMessage(`Uploaded ${result.filename ?? selectedFile.name} (${result.chunks ?? 0} chunks).`);
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "Upload failed.");
@@ -64,11 +64,11 @@ function App() {
       <h1 style={{ marginBottom: 24 }}>Local Knowledge Chat</h1>
 
       <section style={{ border: "1px solid #d9d9d9", borderRadius: 8, padding: 16, marginBottom: 16 }}>
-        <h2 style={{ marginTop: 0 }}>Upload .txt</h2>
+        <h2 style={{ marginTop: 0 }}>Upload .txt / .pdf</h2>
         <form onSubmit={handleUpload}>
           <input
             type="file"
-            accept=".txt,text/plain"
+            accept=".txt,.pdf,text/plain,application/pdf"
             onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
             disabled={uploadLoading}
           />
@@ -112,6 +112,8 @@ function App() {
               {sources.map((item, index) => (
                 <li key={`${item.chunk_id}-${index}`} style={{ marginBottom: 8 }}>
                   <strong>{item.source || "unknown"}</strong> | chunk: {item.chunk_id || "-"} | score: {item.score.toFixed(4)}
+                  {item.page_number ? ` | page: ${item.page_number}` : ""}
+                  {item.file_type ? ` | type: ${item.file_type}` : ""}
                   <div>{item.preview}</div>
                 </li>
               ))}

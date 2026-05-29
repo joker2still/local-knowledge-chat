@@ -26,7 +26,7 @@ def answer_question(question: str) -> ChatResponse:
 
     if not matches:
         return ChatResponse(
-            answer="No documents are available yet. Please upload a .txt file first.",
+            answer="No documents are available yet. Please upload a .txt or .pdf file first.",
             sources=[],
         )
 
@@ -43,6 +43,8 @@ def answer_question(question: str) -> ChatResponse:
                 chunk_id=str(payload.get("chunk_id", match.get("id", ""))),
                 score=float(match.get("score", 0.0)),
                 preview=text[:120],
+                page_number=payload.get("page_number"),
+                file_type=str(payload.get("file_type", "")),
             )
         )
 

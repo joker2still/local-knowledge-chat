@@ -3,6 +3,8 @@ export type ChatSource = {
   chunk_id: string;
   score: number;
   preview: string;
+  page_number?: number | null;
+  file_type?: string;
 };
 
 export type ChatResponse = {
