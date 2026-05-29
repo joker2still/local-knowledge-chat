@@ -1,10 +1,27 @@
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ChatRequest(BaseModel):
-    prompt: str = Field(..., min_length=1)
+    session_id: str = "default"
+    message: str | None = Field(default=None, min_length=1)
+    prompt: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def normalize_message(self) -> "ChatRequest":
+        if not self.session_id.strip():
+            self.session_id = "default"
+
+        if self.message and self.message.strip():
+            self.message = self.message.strip()
+            return self
+
+        if self.prompt and self.prompt.strip():
+            self.message = self.prompt.strip()
+            return self
+
+        raise ValueError("message is required")
 
 
 class ChatSource(BaseModel):
@@ -21,3 +38,4 @@ class ChatResponse(BaseModel):
     selected_tool: str = ""
     tool_result: dict[str, Any] | list[dict[str, Any]] | list[str] | None = None
     sources: list[ChatSource]
+    session_id: str = "default"

@@ -9,4 +9,4 @@ router = APIRouter()
 
 @router.post("/chat", response_model=ChatResponse)
 def chat(payload: ChatRequest) -> ChatResponse:
-    return answer_question(payload.prompt)
+    return answer_question(payload.session_id, payload.message or "")

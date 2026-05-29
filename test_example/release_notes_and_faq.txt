@@ -1,0 +1,48 @@
+Release Notes and FAQ
+
+Version: 0.9.3
+Release Date: 2026-05-20
+Prepared By: Product Engineering
+
+Release Summary
+Version 0.9.3 improves local retrieval consistency for mixed TXT and PDF datasets. The release also clarifies error messages when the system cannot answer from indexed context. No changes were made to supported upload formats in this release.
+
+Highlights
+- Improved chunk boundary handling for long paragraphs in plain text documents.
+- Added clearer empty-context messaging when no relevant chunks are found.
+- Preserved page_number metadata more consistently for parsed PDF pages.
+- Reduced duplicate source snippets in some repeated-header documents.
+
+Known Limitations
+- Scanned PDF files without extractable text may still fail to produce useful chunks.
+- Tables in PDFs may be read out of visual order depending on the parser output.
+- Very small uploads with only one short sentence may not provide enough context for reliable answers.
+- If Ollama is not running, generation requests will fail even when retrieval succeeds.
+
+FAQ
+Q: Which file types can I upload?
+A: TXT and PDF are supported.
+
+Q: What happens if the model does not find relevant context?
+A: The application should avoid guessing and should indicate that the answer is unknown or that more relevant documents are needed.
+
+Q: Why are source snippets important?
+A: They help users verify where the answer came from and are necessary for trust in retrieval-augmented generation.
+
+Q: Which metadata fields should remain attached to each chunk?
+A: source, chunk_id, text, page_number, and file_type.
+
+Q: Where is the local vector database stored by default?
+A: The default Qdrant local path is backend/data/qdrant.
+
+Test Prompts
+Prompt 1: What file types are supported by the application?
+Prompt 2: What should the app do when it lacks enough context?
+Prompt 3: Which metadata fields are required for frontend source display?
+Prompt 4: What are the known limitations of scanned PDFs?
+
+Expected Retrieval Targets
+For Prompt 1, the best match should mention TXT and PDF support.
+For Prompt 2, the best match should mention avoiding guesses and stating uncertainty.
+For Prompt 3, the best match should list source, chunk_id, text, page_number, and file_type.
+For Prompt 4, the best match should mention missing extractable text in scanned PDFs.

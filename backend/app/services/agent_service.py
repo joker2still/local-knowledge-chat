@@ -3,6 +3,7 @@ import logging
 import re
 
 from backend.app.schemas.chat import ChatResponse
+from backend.app.services.conversation_memory import add_message, format_history, get_recent_messages
 from backend.app.services.llm_service import generate_response
 from backend.app.services.tools.document_tools import delete_document, get_document_chunks, list_documents, summarize_document
 from backend.app.services.tools.knowledge_tools import answer_directly, search_knowledge_base
@@ -47,34 +48,45 @@ Rules:
 - Do not include markdown or explanation
 - Do not include markdown in the JSON
 
-User question:
+Recent conversation:
+{history}
+
+Current user question:
 {question}
 """
 
 
-def answer_question(question: str) -> ChatResponse:
-    logger.info("agent_request_received question_length=%s", len(question))
+def answer_question(session_id: str, question: str) -> ChatResponse:
+    normalized_session_id = session_id.strip() or "default"
+    logger.info("agent_request_received session_id=%s question_length=%s", normalized_session_id, len(question))
 
-    decision = decide_tool(question)
+    history_messages = get_recent_messages(normalized_session_id)
+    history_text = format_history(history_messages)
+
+    decision = decide_tool(question, history_text)
     selected_tool = str(decision.get("tool", "search_knowledge_base"))
     tool_query = str(decision.get("query", question))
     tool_doc_id = str(decision.get("doc_id", "")).strip()
 
     tool_result = execute_tool(selected_tool, question, tool_query, tool_doc_id)
     selected_tool = str(tool_result.get("selected_tool", selected_tool))
-    final_answer = generate_final_answer(question, selected_tool, tool_result)
+    final_answer = generate_final_answer(question, selected_tool, tool_result, history_text)
     sources = tool_result.get("sources", []) if isinstance(tool_result, dict) else []
+
+    add_message(normalized_session_id, "user", question)
+    add_message(normalized_session_id, "assistant", final_answer)
 
     return ChatResponse(
         answer=final_answer,
         selected_tool=selected_tool,
         tool_result=tool_result,
         sources=sources,
+        session_id=normalized_session_id,
     )
 
 
-def decide_tool(question: str) -> dict:
-    raw_decision = generate_response(TOOL_DECISION_PROMPT.format(question=question))
+def decide_tool(question: str, history_text: str) -> dict:
+    raw_decision = generate_response(TOOL_DECISION_PROMPT.format(question=question, history=history_text))
     parsed_decision = parse_tool_decision(raw_decision)
     if not parsed_decision:
         logger.warning("agent_tool_decision_parse_failed fallback=search_knowledge_base")
@@ -134,14 +146,16 @@ def execute_tool(selected_tool: str, question: str, tool_input: str, doc_id: str
     return result
 
 
-def generate_final_answer(question: str, selected_tool: str, tool_result: dict) -> str:
+def generate_final_answer(question: str, selected_tool: str, tool_result: dict, history_text: str) -> str:
     prompt = (
         "You are a helpful assistant for a local knowledge chat system.\n"
         "Use the selected tool result to answer the user.\n"
         "If the tool result contains sources or context, rely on them.\n"
         "If the tool is list_documents, summarize the available documents clearly.\n"
         "If the tool is answer_directly, improve or restate the draft answer if useful.\n"
+        "Use recent conversation when it is relevant to resolve references or follow-up questions.\n"
         "Do not mention internal routing unless the user asked.\n\n"
+        f"Recent conversation:\n{history_text}\n\n"
         f"User question: {question}\n"
         f"Selected tool: {selected_tool}\n"
         f"Tool result:\n{json.dumps(tool_result, ensure_ascii=False, indent=2)}\n\n"
