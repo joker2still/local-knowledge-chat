@@ -20,6 +20,27 @@ class DocumentListResponse(BaseModel):
     total_chunks: int
 
 
+class DocumentChunkItem(BaseModel):
+    chunk_id: str
+    source: str
+    page_number: int | None = None
+    file_type: str = ""
+    text: str
+    preview: str
+
+
+class DocumentChunksResponse(BaseModel):
+    doc_id: str
+    chunk_count: int
+    chunks: list[DocumentChunkItem]
+
+
+class DocumentSummaryResponse(BaseModel):
+    doc_id: str
+    summary: str
+    sources: list[dict]
+
+
 class DeleteDocumentResponse(BaseModel):
     filename: str
     deleted_chunks: int

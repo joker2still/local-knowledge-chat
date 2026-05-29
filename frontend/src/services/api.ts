@@ -1,4 +1,13 @@
-import type { ChatRequest, ChatResponse, ChatSource, SessionsResponse, UploadResponse } from "../types";
+import type {
+  ChatRequest,
+  ChatResponse,
+  ChatSource,
+  DocumentChunksResponse,
+  DocumentListResponse,
+  DocumentSummaryResponse,
+  SessionsResponse,
+  UploadResponse,
+} from "../types";
 
 const BASE_URL = "http://127.0.0.1:8000";
 
@@ -17,6 +26,14 @@ function normalizeSource(raw: any): ChatSource {
   };
 }
 
+async function readJson(response: Response, fallbackMessage: string): Promise<any> {
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(readErrorMessage(data, fallbackMessage));
+  }
+  return data;
+}
+
 export async function uploadDocumentFile(file: File): Promise<UploadResponse> {
   const formData = new FormData();
   formData.append("file", file);
@@ -26,12 +43,7 @@ export async function uploadDocumentFile(file: File): Promise<UploadResponse> {
     body: formData,
   });
 
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(readErrorMessage(data, "Upload failed"));
-  }
-
-  return data as UploadResponse;
+  return readJson(response, "Upload failed");
 }
 
 export async function sendChat(payload: ChatRequest): Promise<ChatResponse> {
@@ -43,11 +55,7 @@ export async function sendChat(payload: ChatRequest): Promise<ChatResponse> {
     body: JSON.stringify(payload),
   });
 
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(readErrorMessage(data, "Chat request failed"));
-  }
-
+  const data = await readJson(response, "Chat request failed");
   const sources = Array.isArray(data?.sources)
     ? data.sources.map((item: any) => normalizeSource(item))
     : [];
@@ -63,10 +71,7 @@ export async function sendChat(payload: ChatRequest): Promise<ChatResponse> {
 
 export async function listConversations(): Promise<SessionsResponse> {
   const response = await fetch(`${BASE_URL}/conversations`);
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(readErrorMessage(data, "Failed to load conversations"));
-  }
+  const data = await readJson(response, "Failed to load conversations");
   return {
     sessions: Array.isArray(data?.sessions) ? data.sessions.map((item: unknown) => String(item)) : [],
   };
@@ -76,18 +81,55 @@ export async function clearConversation(sessionId: string): Promise<void> {
   const response = await fetch(`${BASE_URL}/conversations/${encodeURIComponent(sessionId)}/clear`, {
     method: "POST",
   });
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(readErrorMessage(data, "Failed to clear conversation"));
-  }
+  await readJson(response, "Failed to clear conversation");
 }
 
 export async function deleteConversation(sessionId: string): Promise<void> {
   const response = await fetch(`${BASE_URL}/conversations/${encodeURIComponent(sessionId)}`, {
     method: "DELETE",
   });
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(readErrorMessage(data, "Failed to delete conversation"));
-  }
+  await readJson(response, "Failed to delete conversation");
+}
+
+export async function listDocuments(): Promise<DocumentListResponse> {
+  const response = await fetch(`${BASE_URL}/documents`);
+  const data = await readJson(response, "Failed to load documents");
+  return {
+    documents: Array.isArray(data?.documents) ? data.documents : [],
+    total_files: Number(data?.total_files ?? 0),
+    total_chunks: Number(data?.total_chunks ?? 0),
+  };
+}
+
+export async function getDocumentChunks(docId: string): Promise<DocumentChunksResponse> {
+  const response = await fetch(`${BASE_URL}/documents/${encodeURIComponent(docId)}/chunks`);
+  const data = await readJson(response, "Failed to load document chunks");
+  return {
+    doc_id: String(data?.doc_id ?? docId),
+    chunk_count: Number(data?.chunk_count ?? 0),
+    chunks: Array.isArray(data?.chunks) ? data.chunks : [],
+  };
+}
+
+export async function summarizeDocument(docId: string): Promise<DocumentSummaryResponse> {
+  const response = await fetch(`${BASE_URL}/documents/${encodeURIComponent(docId)}/summary`, {
+    method: "POST",
+  });
+  const data = await readJson(response, "Failed to summarize document");
+  const sources = Array.isArray(data?.sources)
+    ? data.sources.map((item: any) => normalizeSource(item))
+    : [];
+
+  return {
+    doc_id: String(data?.doc_id ?? docId),
+    summary: String(data?.summary ?? ""),
+    sources,
+  };
+}
+
+export async function deleteDocument(docId: string): Promise<void> {
+  const response = await fetch(`${BASE_URL}/documents/${encodeURIComponent(docId)}`, {
+    method: "DELETE",
+  });
+  await readJson(response, "Failed to delete document");
 }

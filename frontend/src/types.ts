@@ -38,3 +38,37 @@ export type UploadResponse = {
   vector_store?: string;
   detail?: string;
 };
+
+export type DocumentItem = {
+  filename: string;
+  file_type?: string;
+  chunks: number;
+  page_count?: number;
+};
+
+export type DocumentListResponse = {
+  documents: DocumentItem[];
+  total_files: number;
+  total_chunks: number;
+};
+
+export type DocumentChunk = {
+  chunk_id: string;
+  source: string;
+  page_number?: number | null;
+  file_type?: string;
+  text: string;
+  preview: string;
+};
+
+export type DocumentChunksResponse = {
+  doc_id: string;
+  chunk_count: number;
+  chunks: DocumentChunk[];
+};
+
+export type DocumentSummaryResponse = {
+  doc_id: string;
+  summary: string;
+  sources: ChatSource[];
+};
