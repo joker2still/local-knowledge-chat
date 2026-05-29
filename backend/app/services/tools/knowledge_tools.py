@@ -1,16 +1,9 @@
 from backend.app.services.llm_service import generate_response
-from backend.app.services.rag_service import build_rag_prompt, format_sources, retrieve_matches
+from backend.app.services.rag_service import search_knowledge_context
 
 
-def search_knowledge_base(query: str) -> dict:
-    matches = retrieve_matches(query)
-    sources = format_sources(matches)
-    return {
-        "query": query,
-        "result_count": len(sources),
-        "sources": [source.model_dump() for source in sources],
-        "context": build_rag_prompt(query, matches) if matches else "",
-    }
+def search_knowledge_base(query: str, history_text: str = "") -> dict:
+    return search_knowledge_context(query, history_text=history_text)
 
 
 def answer_directly(question: str) -> dict:

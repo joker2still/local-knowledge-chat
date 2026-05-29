@@ -35,6 +35,8 @@ class ChatSource(BaseModel):
 
 class ChatResponse(BaseModel):
     answer: str
+    original_question: str = ""
+    rewritten_query: str = ""
     selected_tool: str = ""
     tool_result: dict[str, Any] | list[dict[str, Any]] | list[str] | None = None
     sources: list[ChatSource]

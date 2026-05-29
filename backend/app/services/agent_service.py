@@ -5,6 +5,7 @@ import re
 from backend.app.schemas.chat import ChatResponse
 from backend.app.services.conversation_memory import add_message, format_history, get_recent_messages
 from backend.app.services.llm_service import generate_response
+from backend.app.services.rag_service import INSUFFICIENT_CONTEXT_MESSAGE
 from backend.app.services.tools.document_tools import delete_document, get_document_chunks, list_documents, summarize_document
 from backend.app.services.tools.knowledge_tools import answer_directly, search_knowledge_base
 
@@ -68,16 +69,19 @@ def answer_question(session_id: str, question: str) -> ChatResponse:
     tool_query = str(decision.get("query", question))
     tool_doc_id = str(decision.get("doc_id", "")).strip()
 
-    tool_result = execute_tool(selected_tool, question, tool_query, tool_doc_id)
+    tool_result = execute_tool(selected_tool, question, tool_query, tool_doc_id, history_text)
     selected_tool = str(tool_result.get("selected_tool", selected_tool))
     final_answer = generate_final_answer(question, selected_tool, tool_result, history_text)
     sources = tool_result.get("sources", []) if isinstance(tool_result, dict) else []
+    rewritten_query = str(tool_result.get("rewritten_query", tool_query if selected_tool == "search_knowledge_base" else ""))
 
     add_message(normalized_session_id, "user", question)
     add_message(normalized_session_id, "assistant", final_answer)
 
     return ChatResponse(
         answer=final_answer,
+        original_question=question,
+        rewritten_query=rewritten_query,
         selected_tool=selected_tool,
         tool_result=tool_result,
         sources=sources,
@@ -126,7 +130,7 @@ def parse_tool_decision(raw_decision: str) -> dict | None:
             return None
 
 
-def execute_tool(selected_tool: str, question: str, tool_input: str, doc_id: str) -> dict:
+def execute_tool(selected_tool: str, question: str, tool_input: str, doc_id: str, history_text: str) -> dict:
     if selected_tool == "list_documents":
         result = list_documents()
     elif selected_tool == "get_document_chunks":
@@ -139,7 +143,7 @@ def execute_tool(selected_tool: str, question: str, tool_input: str, doc_id: str
         result = answer_directly(tool_input or question)
     else:
         selected_tool = "search_knowledge_base"
-        result = search_knowledge_base(tool_input or question)
+        result = search_knowledge_base(question, history_text=history_text)
 
     logger.info("agent_tool_executed tool=%s", selected_tool)
     result["selected_tool"] = selected_tool
@@ -147,10 +151,14 @@ def execute_tool(selected_tool: str, question: str, tool_input: str, doc_id: str
 
 
 def generate_final_answer(question: str, selected_tool: str, tool_result: dict, history_text: str) -> str:
+    if selected_tool == "search_knowledge_base" and tool_result.get("insufficient_context"):
+        return str(tool_result.get("message", INSUFFICIENT_CONTEXT_MESSAGE))
+
     prompt = (
         "You are a helpful assistant for a local knowledge chat system.\n"
         "Use the selected tool result to answer the user.\n"
         "If the tool result contains sources or context, rely on them.\n"
+        f"If the knowledge-base evidence is insufficient, answer with exactly: {INSUFFICIENT_CONTEXT_MESSAGE}\n"
         "If the tool is list_documents, summarize the available documents clearly.\n"
         "If the tool is answer_directly, improve or restate the draft answer if useful.\n"
         "Use recent conversation when it is relevant to resolve references or follow-up questions.\n"

@@ -19,17 +19,17 @@ def _client() -> QdrantClient:
 def ensure_collection(vector_size: int) -> None:
     client = _client()
     try:
-        client.get_collection(collection_name=settings.qdrant_collection)
+        client.get_collection(collection_name=settings.qdrant_collection_name)
         return
     except Exception:
         pass
 
     try:
         client.create_collection(
-            collection_name=settings.qdrant_collection,
+            collection_name=settings.qdrant_collection_name,
             vectors_config=models.VectorParams(size=vector_size, distance=models.Distance.COSINE),
         )
-        logger.info("qdrant_collection_created collection=%s vector_size=%s", settings.qdrant_collection, vector_size)
+        logger.info("qdrant_collection_created collection=%s vector_size=%s", settings.qdrant_collection_name, vector_size)
     except Exception as exc:
         logger.exception("Failed to create qdrant collection")
         raise ExternalServiceError("Failed to initialize Qdrant collection") from exc
@@ -43,7 +43,7 @@ def upsert_chunks(points: list[dict[str, Any]], vector_size: int) -> None:
     client = _client()
     try:
         client.upsert(
-            collection_name=settings.qdrant_collection,
+            collection_name=settings.qdrant_collection_name,
             points=[
                 models.PointStruct(id=point["id"], vector=point["vector"], payload=point["payload"])
                 for point in points
@@ -64,7 +64,7 @@ def search_chunks(query_vector: list[float], limit: int | None = None) -> list[d
     client = _client()
     try:
         results = client.query_points(
-            collection_name=settings.qdrant_collection,
+            collection_name=settings.qdrant_collection_name,
             query=query_vector,
             limit=top_k,
             with_payload=True,
@@ -86,7 +86,7 @@ def search_chunks(query_vector: list[float], limit: int | None = None) -> list[d
 def count_chunks() -> int:
     client = _client()
     try:
-        result = client.count(collection_name=settings.qdrant_collection, exact=True)
+        result = client.count(collection_name=settings.qdrant_collection_name, exact=True)
     except Exception:
         return 0
     return int(result.count)
@@ -103,7 +103,7 @@ def list_document_stats() -> list[dict[str, Any]]:
     while True:
         try:
             points, next_offset = client.scroll(
-                collection_name=settings.qdrant_collection,
+                collection_name=settings.qdrant_collection_name,
                 limit=256,
                 with_payload=True,
                 with_vectors=False,
@@ -160,7 +160,7 @@ def list_chunks_by_source(source: str) -> list[dict[str, Any]]:
     while True:
         try:
             points, next_offset = client.scroll(
-                collection_name=settings.qdrant_collection,
+                collection_name=settings.qdrant_collection_name,
                 limit=256,
                 with_payload=True,
                 with_vectors=False,
@@ -202,7 +202,7 @@ def count_chunks_by_source(source: str) -> int:
     client = _client()
     try:
         result = client.count(
-            collection_name=settings.qdrant_collection,
+            collection_name=settings.qdrant_collection_name,
             count_filter=_source_filter(source),
             exact=True,
         )
@@ -219,7 +219,7 @@ def delete_chunks_by_source(source: str) -> int:
     client = _client()
     try:
         client.delete(
-            collection_name=settings.qdrant_collection,
+            collection_name=settings.qdrant_collection_name,
             points_selector=models.FilterSelector(filter=_source_filter(source)),
         )
     except Exception as exc:
@@ -236,7 +236,7 @@ def clear_collection() -> int:
 
     client = _client()
     try:
-        client.delete_collection(collection_name=settings.qdrant_collection)
+        client.delete_collection(collection_name=settings.qdrant_collection_name)
     except Exception as exc:
         logger.exception("Failed to delete qdrant collection")
         raise ExternalServiceError("Failed to clear Qdrant collection") from exc
