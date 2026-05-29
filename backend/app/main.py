@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.app.api.chat import router as chat_router
+from backend.app.api.conversations import router as conversations_router
 from backend.app.api.documents import router as documents_router
 from backend.app.core.exceptions import AppError
 from backend.app.core.logging_config import setup_logging
@@ -54,6 +55,7 @@ async def unhandled_error_handler(_: Request, exc: Exception) -> JSONResponse:
 
 
 app.include_router(chat_router)
+app.include_router(conversations_router)
 app.include_router(documents_router)
 
 

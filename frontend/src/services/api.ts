@@ -1,4 +1,4 @@
-import type { ChatResponse, ChatSource, UploadResponse } from "../types";
+import type { ChatRequest, ChatResponse, ChatSource, SessionsResponse, UploadResponse } from "../types";
 
 const BASE_URL = "http://127.0.0.1:8000";
 
@@ -34,13 +34,13 @@ export async function uploadDocumentFile(file: File): Promise<UploadResponse> {
   return data as UploadResponse;
 }
 
-export async function sendChat(prompt: string): Promise<ChatResponse> {
+export async function sendChat(payload: ChatRequest): Promise<ChatResponse> {
   const response = await fetch(`${BASE_URL}/chat`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify(payload),
   });
 
   const data = await response.json();
@@ -54,6 +54,40 @@ export async function sendChat(prompt: string): Promise<ChatResponse> {
 
   return {
     answer: String(data?.answer ?? ""),
+    selected_tool: String(data?.selected_tool ?? ""),
+    tool_result: data?.tool_result ?? null,
     sources,
+    session_id: String(data?.session_id ?? payload.session_id),
   };
+}
+
+export async function listConversations(): Promise<SessionsResponse> {
+  const response = await fetch(`${BASE_URL}/conversations`);
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(readErrorMessage(data, "Failed to load conversations"));
+  }
+  return {
+    sessions: Array.isArray(data?.sessions) ? data.sessions.map((item: unknown) => String(item)) : [],
+  };
+}
+
+export async function clearConversation(sessionId: string): Promise<void> {
+  const response = await fetch(`${BASE_URL}/conversations/${encodeURIComponent(sessionId)}/clear`, {
+    method: "POST",
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(readErrorMessage(data, "Failed to clear conversation"));
+  }
+}
+
+export async function deleteConversation(sessionId: string): Promise<void> {
+  const response = await fetch(`${BASE_URL}/conversations/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(readErrorMessage(data, "Failed to delete conversation"));
+  }
 }

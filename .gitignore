@@ -8,6 +8,7 @@ coverage/
 backend/data/raw/*
 backend/data/processed/*
 backend/data/qdrant/*
+backend/data/conversations/*
 .vscode
 test_embed.py
 !.gitkeep
