@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 from typing import Any
 
 from qdrant_client import QdrantClient
@@ -90,3 +90,117 @@ def count_chunks() -> int:
     except Exception:
         return 0
     return int(result.count)
+
+
+def list_document_stats() -> list[dict[str, Any]]:
+    if count_chunks() == 0:
+        return []
+
+    client = _client()
+    offset: models.PointId | None = None
+    documents: dict[str, dict[str, Any]] = {}
+
+    while True:
+        try:
+            points, next_offset = client.scroll(
+                collection_name=settings.qdrant_collection,
+                limit=256,
+                with_payload=True,
+                with_vectors=False,
+                offset=offset,
+            )
+        except Exception as exc:
+            logger.exception("Failed to list qdrant documents")
+            raise ExternalServiceError("Failed to list documents from Qdrant") from exc
+
+        for point in points:
+            payload = point.payload or {}
+            source = str(payload.get("source", "")).strip()
+            if not source:
+                continue
+
+            file_type = str(payload.get("file_type", "")).strip()
+            page_number = payload.get("page_number")
+
+            if source not in documents:
+                documents[source] = {
+                    "filename": source,
+                    "file_type": file_type,
+                    "chunks": 0,
+                    "page_numbers": set(),
+                }
+
+            documents[source]["chunks"] += 1
+            if page_number is not None:
+                documents[source]["page_numbers"].add(int(page_number))
+
+        if next_offset is None:
+            break
+        offset = next_offset
+
+    return [
+        {
+            "filename": item["filename"],
+            "file_type": item["file_type"],
+            "chunks": item["chunks"],
+            "page_count": len(item["page_numbers"]),
+        }
+        for item in sorted(documents.values(), key=lambda value: value["filename"].lower())
+    ]
+
+
+def count_chunks_by_source(source: str) -> int:
+    client = _client()
+    try:
+        result = client.count(
+            collection_name=settings.qdrant_collection,
+            count_filter=_source_filter(source),
+            exact=True,
+        )
+    except Exception:
+        return 0
+    return int(result.count)
+
+
+def delete_chunks_by_source(source: str) -> int:
+    deleted_chunks = count_chunks_by_source(source)
+    if deleted_chunks == 0:
+        return 0
+
+    client = _client()
+    try:
+        client.delete(
+            collection_name=settings.qdrant_collection,
+            points_selector=models.FilterSelector(filter=_source_filter(source)),
+        )
+    except Exception as exc:
+        logger.exception("Failed to delete chunks by source")
+        raise ExternalServiceError("Failed to delete document vectors from Qdrant") from exc
+
+    return deleted_chunks
+
+
+def clear_collection() -> int:
+    deleted_chunks = count_chunks()
+    if deleted_chunks == 0:
+        return 0
+
+    client = _client()
+    try:
+        client.delete_collection(collection_name=settings.qdrant_collection)
+    except Exception as exc:
+        logger.exception("Failed to delete qdrant collection")
+        raise ExternalServiceError("Failed to clear Qdrant collection") from exc
+
+    return deleted_chunks
+
+
+def _source_filter(source: str) -> models.Filter:
+    return models.Filter(
+        must=[
+            models.FieldCondition(
+                key="source",
+                match=models.MatchValue(value=source),
+            )
+        ]
+    )

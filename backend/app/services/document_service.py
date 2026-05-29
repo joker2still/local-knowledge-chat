@@ -6,9 +6,9 @@ from fastapi import UploadFile
 from pypdf import PdfReader
 
 from backend.app.core.config import settings
-from backend.app.core.exceptions import AppError
+from backend.app.core.exceptions import AppError, NotFoundError
 from backend.app.services.embedding_service import generate_embedding
-from backend.app.services.vector_store import upsert_chunks
+from backend.app.services.vector_store import clear_collection, delete_chunks_by_source, list_document_stats, upsert_chunks
 
 
 logger = logging.getLogger(__name__)
@@ -70,6 +70,85 @@ def ingest_text_file(file: UploadFile) -> dict:
         "filename": filename,
         "chunks": chunk_count,
         "vector_store": "qdrant_local",
+    }
+
+
+def list_documents() -> dict:
+    documents = list_document_stats()
+    return {
+        "documents": documents,
+        "total_files": len(documents),
+        "total_chunks": sum(item["chunks"] for item in documents),
+    }
+
+
+def delete_document(filename: str) -> dict:
+    deleted_chunks = delete_chunks_by_source(filename)
+    if deleted_chunks == 0:
+        raise NotFoundError(message=f"Document '{filename}' not found")
+
+    raw_file_deleted = delete_raw_file(filename)
+    logger.info("document_deleted filename=%s deleted_chunks=%s raw_file_deleted=%s", filename, deleted_chunks, raw_file_deleted)
+
+    return {
+        "filename": filename,
+        "deleted_chunks": deleted_chunks,
+        "raw_file_deleted": raw_file_deleted,
+    }
+
+
+def delete_documents(filenames: list[str]) -> dict:
+    results = []
+    deleted_files = 0
+    deleted_chunks = 0
+
+    for filename in filenames:
+        deleted_count = delete_chunks_by_source(filename)
+        raw_file_deleted = delete_raw_file(filename) if deleted_count > 0 else False
+        found = deleted_count > 0
+
+        if found:
+            deleted_files += 1
+            deleted_chunks += deleted_count
+            logger.info(
+                "document_deleted filename=%s deleted_chunks=%s raw_file_deleted=%s",
+                filename,
+                deleted_count,
+                raw_file_deleted,
+            )
+
+        results.append(
+            {
+                "filename": filename,
+                "deleted_chunks": deleted_count,
+                "raw_file_deleted": raw_file_deleted,
+                "found": found,
+            }
+        )
+
+    return {
+        "results": results,
+        "deleted_files": deleted_files,
+        "deleted_chunks": deleted_chunks,
+    }
+
+
+def clear_documents() -> dict:
+    documents = list_document_stats()
+    raw_files_deleted = clear_raw_files()
+    deleted_chunks = clear_collection()
+
+    logger.info(
+        "documents_cleared deleted_files=%s deleted_chunks=%s raw_files_deleted=%s",
+        len(documents),
+        deleted_chunks,
+        raw_files_deleted,
+    )
+
+    return {
+        "deleted_files": len(documents),
+        "deleted_chunks": deleted_chunks,
+        "raw_files_deleted": raw_files_deleted,
     }
 
 
@@ -180,3 +259,26 @@ def split_text(text: str, chunk_size: int | None = None, overlap: int | None = N
         start += step
 
     return chunks
+
+
+def delete_raw_file(filename: str) -> bool:
+    raw_file_path = settings.raw_data_dir_obj / filename
+    if not raw_file_path.exists() or not raw_file_path.is_file():
+        return False
+
+    raw_file_path.unlink()
+    return True
+
+
+def clear_raw_files() -> int:
+    raw_dir = settings.raw_data_dir_obj
+    if not raw_dir.exists():
+        return 0
+
+    deleted_count = 0
+    for path in raw_dir.iterdir():
+        if path.is_file():
+            path.unlink()
+            deleted_count += 1
+
+    return deleted_count
