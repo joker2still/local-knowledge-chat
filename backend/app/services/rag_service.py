@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 
 from backend.app.core.config import settings
 from backend.app.schemas.chat import ChatResponse, ChatSource
@@ -16,23 +16,14 @@ SYSTEM_INSTRUCTION = (
 )
 
 
-def answer_question(question: str) -> ChatResponse:
-    logger.info("chat_request_received question_length=%s", len(question))
+def retrieve_matches(query: str, limit: int | None = None) -> list[dict]:
+    query_embedding = generate_embedding(query)
+    matches = search_chunks(query_embedding, limit=limit or settings.retrieval_top_k)
+    logger.info("chat_retrieval_done top_k=%s result_count=%s", limit or settings.retrieval_top_k, len(matches))
+    return matches
 
-    query_embedding = generate_embedding(question)
-    matches = search_chunks(query_embedding, limit=settings.retrieval_top_k)
 
-    logger.info("chat_retrieval_done top_k=%s result_count=%s", settings.retrieval_top_k, len(matches))
-
-    if not matches:
-        return ChatResponse(
-            answer="No documents are available yet. Please upload a .txt or .pdf file first.",
-            sources=[],
-        )
-
-    prompt = build_rag_prompt(question, matches)
-    answer = generate_response(prompt)
-
+def format_sources(matches: list[dict]) -> list[ChatSource]:
     sources = []
     for match in matches:
         payload = match.get("payload", {})
@@ -47,8 +38,7 @@ def answer_question(question: str) -> ChatResponse:
                 file_type=str(payload.get("file_type", "")),
             )
         )
-
-    return ChatResponse(answer=answer, sources=sources)
+    return sources
 
 
 def build_rag_prompt(question: str, matches: list[dict]) -> str:
@@ -66,4 +56,28 @@ def build_rag_prompt(question: str, matches: list[dict]) -> str:
         f"Context:\n{context}\n\n"
         f"User question: {question}\n"
         "Answer:"
+    )
+
+
+def answer_with_knowledge_base(question: str) -> ChatResponse:
+    logger.info("chat_request_received question_length=%s", len(question))
+    matches = retrieve_matches(question)
+
+    if not matches:
+        return ChatResponse(
+            answer="No documents are available yet. Please upload a .txt or .pdf file first.",
+            selected_tool="search_knowledge_base",
+            tool_result={"query": question, "matches": [], "message": "No documents available"},
+            sources=[],
+        )
+
+    prompt = build_rag_prompt(question, matches)
+    answer = generate_response(prompt)
+    sources = format_sources(matches)
+
+    return ChatResponse(
+        answer=answer,
+        selected_tool="search_knowledge_base",
+        tool_result={"query": question, "matches": [source.model_dump() for source in sources]},
+        sources=sources,
     )

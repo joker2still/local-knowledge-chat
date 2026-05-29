@@ -149,6 +149,55 @@ def list_document_stats() -> list[dict[str, Any]]:
     ]
 
 
+def list_chunks_by_source(source: str) -> list[dict[str, Any]]:
+    if not source or count_chunks_by_source(source) == 0:
+        return []
+
+    client = _client()
+    offset: models.PointId | None = None
+    chunks: list[dict[str, Any]] = []
+
+    while True:
+        try:
+            points, next_offset = client.scroll(
+                collection_name=settings.qdrant_collection,
+                limit=256,
+                with_payload=True,
+                with_vectors=False,
+                offset=offset,
+                scroll_filter=_source_filter(source),
+            )
+        except Exception as exc:
+            logger.exception("Failed to list qdrant chunks by source")
+            raise ExternalServiceError("Failed to list document chunks from Qdrant") from exc
+
+        for point in points:
+            payload = point.payload or {}
+            text = str(payload.get("text", ""))
+            chunks.append(
+                {
+                    "chunk_id": str(payload.get("chunk_id", point.id)),
+                    "source": str(payload.get("source", source)),
+                    "page_number": payload.get("page_number"),
+                    "file_type": str(payload.get("file_type", "")),
+                    "text": text,
+                    "preview": text[:200],
+                }
+            )
+
+        if next_offset is None:
+            break
+        offset = next_offset
+
+    return sorted(
+        chunks,
+        key=lambda item: (
+            item["page_number"] if item["page_number"] is not None else -1,
+            item["chunk_id"],
+        ),
+    )
+
+
 def count_chunks_by_source(source: str) -> int:
     client = _client()
     try:

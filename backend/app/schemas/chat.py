@@ -1,4 +1,6 @@
-﻿from pydantic import BaseModel, Field
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 
 class ChatRequest(BaseModel):
@@ -16,4 +18,6 @@ class ChatSource(BaseModel):
 
 class ChatResponse(BaseModel):
     answer: str
+    selected_tool: str = ""
+    tool_result: dict[str, Any] | list[dict[str, Any]] | list[str] | None = None
     sources: list[ChatSource]
