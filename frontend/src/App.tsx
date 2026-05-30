@@ -79,7 +79,8 @@ export default function App() {
 
   async function handleUpload(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     const file = formData.get("file");
     if (!(file instanceof File) || file.size === 0) {
       setUploadError("Please choose a .txt or .pdf file.");
@@ -94,7 +95,7 @@ export default function App() {
     try {
       const data = await uploadDocumentFile(file);
       setUploadMessage(`Uploaded ${data.filename ?? file.name} with ${data.chunks ?? 0} chunks.`);
-      event.currentTarget.reset();
+      form.reset();
       await refreshDocuments();
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "Upload failed");
